@@ -1,687 +1,175 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>Bitácora de rutina</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --bg:#0E1013;
-    --surface:#181B1F;
-    --surface-2:#21252B;
-    --border:#2A2F36;
-    --text:#F2F0EA;
-    --text-2:#9499A1;
-    --text-muted:#5E636B;
-    --accent:#F2A93B;
-    --accent-dim:#473A22;
-    --done:#4FD1A5;
-    --done-dim:#1C3530;
-    --down:#E2574C;
+/**
+ * BACKEND DE LA BITÁCORA DE GYM — Google Apps Script
+ * ---------------------------------------------------
+ * 1. Crea un Google Sheet nuevo (vacío, no necesitas armar columnas).
+ * 2. Copia el ID del Sheet desde la URL:
+ *    https://docs.google.com/spreadsheets/d/ESTE_ES_EL_ID/edit
+ * 3. En el Sheet: Extensiones > Apps Script.
+ * 4. Borra el contenido de Code.gs y pega TODO este archivo.
+ * 5. Reemplaza SHEET_ID abajo con el ID que copiaste.
+ * 6. Deploy > New deployment > tipo "Web app".
+ *    - Execute as: Me
+ *    - Who has access: Anyone
+ * 7. Copia la URL que te da (termina en /exec) y pégala en
+ *    CONFIG.SCRIPT_URL dentro de rutina-tracker.html
+ */
+
+const SHEET_ID = 'PEGA_AQUI_EL_ID_DE_TU_GOOGLE_SHEET';
+const SESSIONS_SHEET = 'Sessions';
+const SETS_SHEET = 'Sets';
+
+function doGet(e) {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  ensureSheets_(ss);
+  const action = (e.parameter.action || 'all');
+
+  if (action === 'all') {
+    return jsonResponse_(getAllData_(ss));
   }
-  *{box-sizing:border-box;}
-  body{
-    margin:0; background:var(--bg); color:var(--text);
-    font-family:'Inter',sans-serif; -webkit-tap-highlight-color:transparent;
-    padding-bottom:3rem;
-  }
-  .wrap{max-width:480px; margin:0 auto; padding:0 14px;}
-  h1,h2,h3,.num{font-family:'Oswald',sans-serif; font-weight:600; letter-spacing:0.2px;}
-  header{position:sticky; top:0; background:var(--bg); z-index:10; padding:16px 0 8px; border-bottom:0.5px solid var(--border);}
-  .top-row{display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;}
-  .title{font-size:20px; text-transform:uppercase; letter-spacing:1px; margin:0;}
-  .streak{display:flex; align-items:center; gap:6px; font-size:13px; color:var(--accent); background:var(--accent-dim); padding:5px 10px; border-radius:20px;}
-  .tabs{display:flex; gap:6px; overflow-x:auto; padding-bottom:4px; scrollbar-width:none;}
-  .tabs::-webkit-scrollbar{display:none;}
-  .tab{
-    flex:0 0 auto; font-family:'Oswald',sans-serif; font-size:13px; font-weight:500;
-    padding:8px 14px; border-radius:8px; border:0.5px solid var(--border); background:var(--surface);
-    color:var(--text-2); white-space:nowrap;
-  }
-  .tab.active{background:var(--accent); color:#241A05; border-color:var(--accent);}
-
-  .day-info{display:flex; gap:8px; margin:14px 0; flex-wrap:wrap;}
-  .info-pill{flex:1; min-width:130px; background:var(--surface); border:0.5px solid var(--border); border-radius:10px; padding:9px 11px;}
-  .info-pill .lbl{font-size:10.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin:0 0 3px;}
-  .info-pill .val{font-size:12.5px; color:var(--text-2); margin:0;}
-
-  .card{background:var(--surface); border:0.5px solid var(--border); border-radius:12px; padding:14px; margin-bottom:10px;}
-  .ex-head{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:2px;}
-  .ex-name{font-size:15.5px; font-weight:500;}
-  .ex-meta{font-size:11.5px; color:var(--text-muted);}
-  .pr-badge{font-size:10px; font-weight:600; color:var(--accent); background:var(--accent-dim); padding:2px 7px; border-radius:10px; margin-left:6px;}
-
-  .set-row{display:grid; grid-template-columns:28px 1fr 1fr 38px; gap:8px; align-items:center; margin-top:8px;}
-  .set-num{font-family:'Oswald',sans-serif; font-size:13px; color:var(--text-muted); text-align:center;}
-  .set-row input{
-    width:100%; height:38px; background:var(--surface-2); border:0.5px solid var(--border); border-radius:8px;
-    color:var(--text); font-size:14px; text-align:center; font-family:'Inter',sans-serif;
-  }
-  .set-row input::placeholder{color:var(--text-muted);}
-  .check{
-    width:38px; height:38px; border-radius:8px; border:0.5px solid var(--border); background:var(--surface-2);
-    display:flex; align-items:center; justify-content:center; font-size:18px; color:transparent;
-  }
-  .check.on{background:var(--done-dim); border-color:var(--done); color:var(--done);}
-  .delta{font-size:10.5px; margin-top:4px; padding-left:36px;}
-  .delta.up{color:var(--done);}
-  .delta.down{color:var(--down);}
-
-  .rate-card{display:flex; flex-direction:column; gap:10px;}
-  .stars{display:flex; gap:6px;}
-  .star{flex:1; height:40px; border-radius:8px; border:0.5px solid var(--border); background:var(--surface-2); color:var(--text-muted); font-size:16px; display:flex; align-items:center; justify-content:center;}
-  .star.on{background:var(--accent-dim); border-color:var(--accent); color:var(--accent);}
-  textarea{width:100%; min-height:54px; background:var(--surface-2); border:0.5px solid var(--border); border-radius:8px; color:var(--text); font-family:'Inter',sans-serif; font-size:13px; padding:8px; resize:vertical;}
-  .save-btn{
-    width:100%; height:46px; border-radius:10px; border:none; background:var(--accent); color:#241A05;
-    font-family:'Oswald',sans-serif; font-size:15px; font-weight:600; letter-spacing:0.3px; margin-top:4px;
-  }
-  .save-btn:active{transform:scale(0.98);}
-  .save-btn:disabled{opacity:0.6;}
-  .toast{font-size:12.5px; color:var(--done); text-align:center; margin-top:8px; min-height:16px;}
-
-  .hist-toggle{display:flex; justify-content:space-between; align-items:center; margin:18px 0 8px; cursor:pointer;}
-  .hist-toggle h2{font-size:14px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-2); margin:0;}
-  .hist-toggle .chev{color:var(--text-muted); transition:transform 0.15s;}
-  .hist-row{display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-top:0.5px solid var(--border); font-size:13px;}
-  .hist-row:first-child{border-top:none;}
-  .hist-date{color:var(--text);}
-  .hist-meta{color:var(--text-muted); font-size:11.5px;}
-  .hist-stars{color:var(--accent); font-size:11.5px;}
-  .empty{color:var(--text-muted); font-size:13px; padding:10px 0;}
-  .reset-link{font-size:11.5px; color:var(--text-muted); text-align:center; margin-top:14px; text-decoration:underline;}
-  .loading{color:var(--text-muted); font-size:12.5px; padding:8px 0;}
-
-  .view-toggle{display:flex; gap:6px; margin:12px 0 4px;}
-  .vt-btn{flex:1; height:38px; border-radius:9px; border:0.5px solid var(--border); background:var(--surface);
-    color:var(--text-2); font-family:'Oswald',sans-serif; font-size:13px; font-weight:500; letter-spacing:0.3px;}
-  .vt-btn.active{background:var(--accent); color:#241A05; border-color:var(--accent);}
-
-  .stat-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:14px 0;}
-  .stat-box{background:var(--surface); border:0.5px solid var(--border); border-radius:12px; padding:12px 10px; text-align:center;}
-  .stat-box .stat-num{font-family:'Oswald',sans-serif; font-size:22px; color:var(--accent); line-height:1.1;}
-  .stat-box .stat-lbl{font-size:10.5px; color:var(--text-muted); margin-top:3px; text-transform:uppercase; letter-spacing:0.3px;}
-
-  .dash-section-title{font-size:13px; text-transform:uppercase; letter-spacing:0.6px; color:var(--text-2); margin:20px 0 8px;}
-  .ex-progress-card{background:var(--surface); border:0.5px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:8px;}
-  .ep-head{display:flex; justify-content:space-between; align-items:baseline;}
-  .ep-name{font-size:14px; font-weight:500;}
-  .ep-trend{font-size:11.5px; font-weight:600;}
-  .ep-trend.up{color:var(--done);}
-  .ep-trend.down{color:var(--down);}
-  .ep-trend.flat{color:var(--text-muted);}
-  .ep-meta{font-size:11px; color:var(--text-muted); margin-top:1px;}
-  .ep-chart{margin-top:8px;}
-  .dash-empty{color:var(--text-muted); font-size:13px; text-align:center; padding:30px 10px;}
-  .day-pill{display:inline-block; font-size:10px; padding:2px 7px; border-radius:8px; background:var(--surface-2); color:var(--text-muted); margin-left:6px;}
-
-  .config-banner{background:var(--down); color:#2A0B08; font-size:12px; padding:10px 12px; border-radius:10px; margin:12px 0; line-height:1.4;}
-  .refresh-btn{background:none; border:0.5px solid var(--border); color:var(--text-2); font-size:11.5px; padding:5px 10px; border-radius:8px; float:right;}
-</style>
-</head>
-<body>
-<div class="wrap">
-  <header>
-    <div class="top-row">
-      <p class="title">Bitácora</p>
-      <div class="streak"><span id="streak-num">–</span>&nbsp;sesiones / 7 días</div>
-    </div>
-    <div class="tabs" id="tabs"></div>
-  </header>
-
-  <div id="config-banner"></div>
-
-  <div class="view-toggle" id="view-toggle">
-    <button class="vt-btn active" data-view="day">Rutina</button>
-    <button class="vt-btn" data-view="dash">Progreso</button>
-  </div>
-
-  <div id="day-view">
-    <div id="day-info" class="day-info"></div>
-    <div id="exercises"></div>
-
-    <div class="card rate-card">
-      <p class="ex-name" style="margin:0;">Calificación de la sesión</p>
-      <div class="stars" id="stars"></div>
-      <textarea id="note" placeholder="Notas: cómo te sentiste, energía, lo que ajustarías..."></textarea>
-      <button class="save-btn" id="save-btn">Guardar sesión</button>
-      <p class="toast" id="toast"></p>
-    </div>
-
-    <div class="hist-toggle" id="hist-toggle">
-      <h2>Historial de este día</h2>
-      <span class="chev" id="chev">▾</span>
-    </div>
-    <div id="history"></div>
-
-    <p class="reset-link" id="reset-link">Borrar historial de este día</p>
-    <p class="loading" id="storage-info" style="text-align:center; margin-top:6px;"></p>
-  </div>
-
-  <div id="dash-view" style="display:none;"></div>
-</div>
-
-<script>
-// ============================================================
-// CONFIGURACIÓN: pega aquí la URL de tu Web App de Apps Script
-// (la obtienes después de hacer Deploy > New deployment > Web app)
-// ============================================================
-const CONFIG = {
-  SCRIPT_URL: 'PEGA_AQUI_TU_URL_DE_APPS_SCRIPT'
-};
-
-const DAYS = [
-  { key:'d1', label:'Día 1', tag:'Upper A · Fuerza',
-    warmup:'5 min cardio ligero + movilidad de hombro y muñeca',
-    cardio:'15-20 min caminadora inclinación 3-5% o bici, ritmo de conversación (al final)',
-    stretch:'Pecho, espalda, hombros y brazos (8-10 min)',
-    note:'',
-    exercises:[
-      {id:'press-maquina-pecho', name:'Press en máquina pecho plano', sets:4, reps:'6', rest:'2-3 min', type:'weight'},
-      {id:'jalon-ancho', name:'Jalón al pecho agarre ancho', sets:4, reps:'6', rest:'2-3 min', type:'weight'},
-      {id:'press-hombros-maquina', name:'Press en máquina de hombros', sets:3, reps:'6', rest:'2-3 min', type:'weight'},
-      {id:'remo-polea-sentado', name:'Remo en polea sentado agarre neutro', sets:3, reps:'6', rest:'2-3 min', type:'weight'},
-      {id:'ext-triceps-cuerda-d1', name:'Extensión de tríceps en polea con cuerda', sets:3, reps:'10', rest:'90 s', type:'weight'},
-      {id:'curl-biceps-mancuerna', name:'Curl de bíceps con mancuernas', sets:3, reps:'10', rest:'90 s', type:'weight'},
-    ]},
-  { key:'d2', label:'Día 2', tag:'Lower A · Fuerza',
-    warmup:'5 min bicicleta + movilidad de cadera y tobillo',
-    cardio:'15-20 min caminadora inclinación 3-5% o bici, ritmo de conversación (al final)',
-    stretch:'Cuádriceps, femoral, glúteo, pantorrilla (8-10 min)',
-    note:'La prensa de pierna después de más de un año sin entrenar va a darte las agujetas más brutales de tu vida. Empieza con un peso ridículamente bajo — en serio. La semana 2 ya subes.',
-    exercises:[
-      {id:'prensa-pierna-d2', name:'Prensa de pierna', sets:4, reps:'8', rest:'2 min', type:'weight'},
-      {id:'curl-femoral-maquina-d2', name:'Curl femoral en máquina', sets:4, reps:'8', rest:'2 min', type:'weight'},
-      {id:'ext-cuadriceps-d2', name:'Extensión de cuádriceps', sets:3, reps:'10', rest:'90 s', type:'weight'},
-      {id:'aductor-d2', name:'Aductor en máquina', sets:3, reps:'12', rest:'90 s', type:'weight'},
-      {id:'pantorrilla-pie-d2', name:'Elevación de pantorrilla de pie', sets:3, reps:'15', rest:'90 s', type:'weight'},
-    ]},
-  { key:'d3', label:'Día 3', tag:'Upper B · Hipertrofia',
-    warmup:'5 min cardio ligero + movilidad de hombro',
-    cardio:'15-20 min caminadora inclinación 3-5% o bici, ritmo de conversación (al final)',
-    stretch:'Pecho, espalda, hombros y brazos (8-10 min)',
-    note:'Volumen alto, peso menor — la sensación debe ser de quema muscular, no de fuerza máxima.',
-    exercises:[
-      {id:'aperturas-polea', name:'Aperturas en polea (pecho)', sets:3, reps:'12', rest:'60-90 s', type:'weight'},
-      {id:'jalon-cerrado-supino', name:'Jalón al pecho agarre cerrado supino', sets:3, reps:'12', rest:'60-90 s', type:'weight'},
-      {id:'elev-laterales-d3', name:'Elevaciones laterales con mancuernas', sets:3, reps:'15', rest:'60-90 s', type:'weight'},
-      {id:'remo-polea-pie', name:'Remo en polea de pie agarre ancho', sets:3, reps:'12', rest:'60-90 s', type:'weight'},
-      {id:'curl-martillo-d3', name:'Curl martillo con mancuernas', sets:3, reps:'12', rest:'60-90 s', type:'weight'},
-      {id:'fondos-o-press-frances', name:'Fondos en máquina o press francés en polea', sets:3, reps:'12', rest:'60-90 s', type:'weight'},
-      {id:'elev-frontales', name:'Elevaciones frontales con mancuernas', sets:2, reps:'15', rest:'60-90 s', type:'weight'},
-    ]},
-  { key:'d4', label:'Día 4', tag:'Lower B · Hipertrofia',
-    warmup:'5 min bicicleta + movilidad de cadera y tobillo',
-    cardio:'15-20 min caminadora inclinación 3-5% o bici, ritmo de conversación (al final)',
-    stretch:'Cuádriceps, femoral, glúteo, pantorrilla (8-10 min)',
-    note:'Pies altos en el plato = más glúteo y femoral. Pies bajos y juntos = más cuádriceps. Día 2 usas posición estándar, Día 4 pies altos — así trabajas pierna desde ángulos distintos sin repetirte.',
-    exercises:[
-      {id:'prensa-pies-altos-d4', name:'Prensa de pierna pies altos (énfasis glúteo/femoral)', sets:3, reps:'12', rest:'60-90 s', type:'weight'},
-      {id:'ext-cuadriceps-d4', name:'Extensión de cuádriceps', sets:3, reps:'15', rest:'60-90 s', type:'weight'},
-      {id:'curl-femoral-d4', name:'Curl femoral sentado o acostado', sets:3, reps:'12', rest:'60-90 s', type:'weight'},
-      {id:'abductor-d4', name:'Abductor en máquina', sets:3, reps:'15', rest:'60-90 s', type:'weight'},
-      {id:'aductor-d4', name:'Aductor en máquina', sets:3, reps:'15', rest:'60-90 s', type:'weight'},
-      {id:'pantorrilla-sentado-d4', name:'Elevación de pantorrilla sentado', sets:3, reps:'20', rest:'60-90 s', type:'weight'},
-    ]},
-  { key:'d5', label:'Día 5', tag:'Opcional / flexible',
-    warmup:'Según la opción que elijas',
-    cardio:'15-20 min si decides hacer cardio, ritmo de conversación',
-    stretch:'General, según lo que hayas trabajado',
-    note:'Sin estructura fija. Elige según cómo te sientas: (1) Con energía → repite Upper A o B con una serie menos por ejercicio. (2) Cansado pero con ganas de moverte → 30-40 min de cardio moderado en bici o caminadora. (3) Algún grupo rezagado → 3-4 ejercicios de aislamiento para ese grupo.',
-    exercises:[]},
-];
-
-const EX_INDEX = {};
-DAYS.forEach(d => d.exercises.forEach(ex => { EX_INDEX[ex.id] = {name: ex.name, dayLabel: d.label}; }));
-
-// ---------- Backend: Google Sheets vía Apps Script ----------
-
-function isConfigured(){
-  return CONFIG.SCRIPT_URL && !CONFIG.SCRIPT_URL.includes('PEGA_AQUI');
+  return jsonResponse_({ error: 'acción no reconocida: ' + action });
 }
 
-async function apiGetAll(){
-  if(!isConfigured()) return {sessions:[], sets:[]};
-  try{
-    const res = await fetch(CONFIG.SCRIPT_URL + '?action=all');
-    const data = await res.json();
-    return { sessions: data.sessions || [], sets: data.sets || [] };
-  }catch(e){
-    console.error('Error cargando datos de Sheets:', e);
-    return {sessions:[], sets:[]};
+function doPost(e) {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  ensureSheets_(ss);
+
+  let body;
+  try {
+    body = JSON.parse(e.postData.contents);
+  } catch (err) {
+    return jsonResponse_({ error: 'JSON inválido' });
+  }
+
+  const action = body.action;
+
+  if (action === 'saveSession') {
+    saveSession_(ss, body.payload);
+    return jsonResponse_({ ok: true });
+  }
+
+  if (action === 'deleteDay') {
+    deleteDay_(ss, body.payload.day);
+    return jsonResponse_({ ok: true });
+  }
+
+  return jsonResponse_({ error: 'acción no reconocida: ' + action });
+}
+
+// ---------- Helpers ----------
+
+function ensureSheets_(ss) {
+  if (!ss.getSheetByName(SESSIONS_SHEET)) {
+    const sh = ss.insertSheet(SESSIONS_SHEET);
+    sh.appendRow(['savedAt', 'day', 'date', 'location', 'rating', 'note', 'volume']);
+    sh.setFrozenRows(1);
+  }
+  if (!ss.getSheetByName(SETS_SHEET)) {
+    const sh = ss.insertSheet(SETS_SHEET);
+    sh.appendRow(['savedAt', 'day', 'date', 'exerciseId', 'exerciseName', 'setNum', 'weight', 'reps', 'done']);
+    sh.setFrozenRows(1);
   }
 }
 
-async function apiSaveSession(payload){
-  if(!isConfigured()) return false;
-  try{
-    const res = await fetch(CONFIG.SCRIPT_URL, {
-      method:'POST',
-      headers:{'Content-Type':'text/plain;charset=utf-8'}, // evita preflight CORS
-      body: JSON.stringify({action:'saveSession', payload})
-    });
-    const data = await res.json();
-    return !!data.ok;
-  }catch(e){
-    console.error('Error guardando sesión:', e);
-    return false;
-  }
-}
+function saveSession_(ss, payload) {
+  const sessSheet = ss.getSheetByName(SESSIONS_SHEET);
+  const setsSheet = ss.getSheetByName(SETS_SHEET);
+  const savedAt = new Date().toISOString();
 
-async function apiDeleteDay(day){
-  if(!isConfigured()) return false;
-  try{
-    const res = await fetch(CONFIG.SCRIPT_URL, {
-      method:'POST',
-      headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({action:'deleteDay', payload:{day}})
-    });
-    const data = await res.json();
-    return !!data.ok;
-  }catch(e){
-    console.error('Error borrando día:', e);
-    return false;
-  }
-}
+  sessSheet.appendRow([
+    savedAt,
+    payload.day,
+    payload.date,
+    payload.location || 'gym',
+    payload.rating,
+    payload.note || '',
+    payload.volume || 0,
+  ]);
 
-// ---------- Estado en memoria ----------
-
-let currentDay = DAYS[0].key;
-let rating = 0;
-let historyOpen = false;
-let ALL_DATA = { sessions: [], sets: [] };
-let dataLoaded = false;
-
-function round1(n){ return Math.round(n*10)/10; }
-function todayISO(){ return new Date().toISOString().slice(0,10); }
-function parseDefaultReps(label){ const m = label.match(/\d+/); return m ? m[0] : ''; }
-
-function getExerciseStats(day, exId){
-  const rows = ALL_DATA.sets.filter(s => s.day === day && s.exId === exId && parseFloat(s.weight) > 0);
-  if(rows.length === 0) return {last:null, best:null};
-  let best = 0;
-  rows.forEach(r=>{ const w = parseFloat(r.weight); if(w>best) best = w; });
-  const sorted = [...rows].sort((a,b)=> String(a.date).localeCompare(String(b.date)));
-  const lastDate = sorted[sorted.length-1].date;
-  let last = 0;
-  sorted.filter(r=>r.date===lastDate).forEach(r=>{ const w=parseFloat(r.weight); if(w>last) last=w; });
-  return {last, best};
-}
-
-// ---------- Render: pestañas y encabezado del día ----------
-
-function renderConfigBanner(){
-  const el = document.getElementById('config-banner');
-  if(isConfigured()){ el.innerHTML=''; return; }
-  el.innerHTML = `<div class="config-banner">⚠️ Falta configurar tu URL de Apps Script en la constante <b>CONFIG.SCRIPT_URL</b> dentro del archivo. Mientras tanto, nada se está guardando.</div>`;
-}
-
-function renderTabs(){
-  const el = document.getElementById('tabs');
-  el.innerHTML = '';
-  DAYS.forEach(d=>{
-    const b = document.createElement('button');
-    b.className = 'tab' + (d.key===currentDay ? ' active' : '');
-    b.textContent = d.label;
-    b.onclick = ()=>{ currentDay = d.key; rating = 0; loadDay(); };
-    el.appendChild(b);
+  const sets = payload.sets || [];
+  const rows = sets.map(function (s, idx) {
+    return [
+      savedAt,
+      payload.day,
+      payload.date,
+      s.exId,
+      s.exName || '',
+      idx + 1,
+      s.weight || '',
+      s.reps || '',
+      !!s.done,
+    ];
   });
-}
 
-function renderDayInfo(d){
-  const noteHtml = d.note ? `
-    <div class="info-pill" style="flex-basis:100%; border-color:var(--accent); background:var(--accent-dim);">
-      <p class="lbl" style="color:var(--accent);">Nota</p>
-      <p class="val" style="color:var(--text);">${d.note}</p>
-    </div>` : '';
-  document.getElementById('day-info').innerHTML = `
-    <div class="info-pill"><p class="lbl">${d.tag}</p><p class="val">Calentamiento: ${d.warmup}</p></div>
-    <div class="info-pill"><p class="lbl">Cardio</p><p class="val">${d.cardio}</p></div>
-    ${noteHtml}
-  `;
-}
-
-function renderExercises(d){
-  const el = document.getElementById('exercises');
-  el.innerHTML = '';
-  if(!d.exercises || d.exercises.length === 0){
-    el.innerHTML = `<div class="card"><p class="dash-empty" style="padding:10px 0;">Este día no tiene ejercicios fijos — revisa la nota de arriba y elige tu opción del día.</p></div>`;
-    return;
+  if (rows.length > 0) {
+    const startRow = setsSheet.getLastRow() + 1;
+    setsSheet.getRange(startRow, 1, rows.length, rows[0].length).setValues(rows);
   }
-  d.exercises.forEach(ex=>{
-    const stats = getExerciseStats(d.key, ex.id);
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.innerHTML = `
-      <div class="ex-head">
-        <span class="ex-name">${ex.name}${stats.best ? `<span class="pr-badge">mejor: ${stats.best} kg</span>` : ''}</span>
-      </div>
-      <div class="ex-meta">${ex.reps}${ex.type==='weight' ? ' reps' : ''} · descanso ${ex.rest}</div>
-      <div class="sets" data-ex="${ex.id}"></div>
-    `;
-    const setsWrap = card.querySelector('.sets');
-    const lastWeight = stats.last || '';
-    for(let i=1;i<=ex.sets;i++){
-      const row = document.createElement('div');
-      row.className = 'set-row';
-      row.innerHTML = `
-        <span class="set-num">${i}</span>
-        <input type="number" inputmode="decimal" placeholder="kg" step="0.5" data-field="weight" data-set="${i}" value="${i===1 && lastWeight ? lastWeight : ''}">
-        <input type="number" inputmode="numeric" placeholder="reps" data-field="reps" data-set="${i}" value="${parseDefaultReps(ex.reps)}">
-        <button class="check" data-field="done" data-set="${i}">✓</button>
-      `;
-      setsWrap.appendChild(row);
+}
+
+function deleteDay_(ss, day) {
+  [SESSIONS_SHEET, SETS_SHEET].forEach(function (name) {
+    const sh = ss.getSheetByName(name);
+    const data = sh.getDataRange().getValues();
+    // recorre de abajo hacia arriba para no romper índices al borrar
+    for (let i = data.length - 1; i >= 1; i--) {
+      if (data[i][1] === day) {
+        sh.deleteRow(i + 1);
+      }
     }
-    setsWrap.querySelectorAll('.check').forEach(btn=>{
-      btn.onclick = ()=> btn.classList.toggle('on');
-    });
-    if(lastWeight){
-      const firstInput = setsWrap.querySelector('input[data-field="weight"]');
-      firstInput.addEventListener('input', ()=>{
-        const v = parseFloat(firstInput.value);
-        const old = parseFloat(lastWeight);
-        const wrap = setsWrap.closest('.card');
-        let deltaEl = wrap.querySelector('.delta');
-        if(!deltaEl){
-          deltaEl = document.createElement('p');
-          deltaEl.className = 'delta';
-          wrap.appendChild(deltaEl);
-        }
-        if(!isNaN(v) && !isNaN(old) && v!==old){
-          const diff = round1(v-old);
-          deltaEl.textContent = (diff>0?'+':'') + diff + ' kg vs última vez';
-          deltaEl.className = 'delta ' + (diff>0?'up':'down');
-        } else {
-          deltaEl.textContent='';
-        }
-      });
-    }
-    el.appendChild(card);
   });
 }
 
-function renderStars(){
-  const el = document.getElementById('stars');
-  el.innerHTML = '';
-  for(let i=1;i<=5;i++){
-    const b = document.createElement('button');
-    b.className = 'star' + (i<=rating ? ' on' : '');
-    b.textContent = '★';
-    b.onclick = ()=>{ rating = i; renderStars(); };
-    el.appendChild(b);
-  }
-}
+function getAllData_(ss) {
+  const sessSheet = ss.getSheetByName(SESSIONS_SHEET);
+  const setsSheet = ss.getSheetByName(SETS_SHEET);
 
-function renderHistory(){
-  const histEl = document.getElementById('history');
-  if(!historyOpen){ histEl.innerHTML=''; return; }
-  const rows = ALL_DATA.sessions
-    .filter(s => s.day === currentDay)
-    .sort((a,b)=> String(b.date).localeCompare(String(a.date)))
-    .slice(0,8);
-  if(rows.length===0){
-    histEl.innerHTML = '<p class="empty">Aún no hay sesiones guardadas para este día.</p>';
-    return;
-  }
-  histEl.innerHTML = rows.map(s=>`
-    <div class="hist-row">
-      <span class="hist-date">${s.date}</span>
-      <span class="hist-stars">${'★'.repeat(Number(s.rating)||0)}${'☆'.repeat(5-(Number(s.rating)||0))}</span>
-      <span class="hist-meta">${s.volume ? round1(Number(s.volume))+' kg vol.' : ''}</span>
-    </div>
-  `).join('');
-}
+  const sessValues = sessSheet.getDataRange().getValues();
+  const setValues = setsSheet.getDataRange().getValues();
 
-function renderStreak(){
-  const cutoff = Date.now() - 7*24*60*60*1000;
-  const count = ALL_DATA.sessions.filter(s=>{
-    const t = new Date(s.date).getTime();
-    return !isNaN(t) && t >= cutoff;
-  }).length;
-  document.getElementById('streak-num').textContent = count;
-}
-
-async function loadDay(){
-  renderConfigBanner();
-  renderTabs();
-  const d = DAYS.find(x=>x.key===currentDay);
-  renderDayInfo(d);
-  document.getElementById('toast').textContent = '';
-  document.getElementById('note').value = '';
-  rating = 0;
-
-  if(!dataLoaded){
-    document.getElementById('storage-info').textContent = 'Cargando datos de tu Google Sheet…';
-    ALL_DATA = await apiGetAll();
-    dataLoaded = true;
-  }
-
-  renderExercises(d);
-  renderStars();
-  renderHistory();
-  renderStreak();
-
-  document.getElementById('storage-info').textContent = isConfigured()
-    ? 'Guardando en tu Google Sheet.'
-    : 'Guardado desactivado — configura CONFIG.SCRIPT_URL.';
-}
-
-document.getElementById('hist-toggle').onclick = ()=>{
-  historyOpen = !historyOpen;
-  document.getElementById('chev').style.transform = historyOpen ? 'rotate(180deg)' : 'rotate(0deg)';
-  renderHistory();
-};
-
-document.getElementById('save-btn').onclick = async ()=>{
-  const btn = document.getElementById('save-btn');
-  const toast = document.getElementById('toast');
-  btn.disabled = true;
-  btn.textContent = 'Guardando…';
-
-  const d = DAYS.find(x=>x.key===currentDay);
-  const cards = document.querySelectorAll('#exercises .card');
-  const sessionSets = [];
-  let volume = 0;
-
-  cards.forEach((card, idx)=>{
-    const ex = d.exercises[idx];
-    if(!ex) return;
-    const rows = card.querySelectorAll('.set-row');
-    rows.forEach(row=>{
-      const done = row.querySelector('.check').classList.contains('on');
-      const w = parseFloat(row.querySelector('[data-field="weight"]').value) || 0;
-      const r = parseFloat(row.querySelector('[data-field="reps"]').value) || 0;
-      if(w>0 && r>0) volume += w*r;
-      sessionSets.push({exId:ex.id, exName:ex.name, weight:w, reps:r, done});
-    });
-  });
-
-  const date = todayISO();
-  const payload = {
-    day: currentDay,
-    date,
-    rating,
-    note: document.getElementById('note').value,
-    volume,
-    sets: sessionSets,
-  };
-
-  const ok = await apiSaveSession(payload);
-
-  btn.disabled = false;
-  btn.textContent = 'Guardar sesión';
-
-  if(ok){
-    // actualiza caché local sin tener que recargar todo
-    ALL_DATA.sessions.push({day: currentDay, date, rating, note: payload.note, volume});
-    sessionSets.forEach(s=> ALL_DATA.sets.push({day: currentDay, date, exId: s.exId, exName: s.exName, weight: s.weight, reps: s.reps, duration:'', done: s.done}));
-
-    toast.style.color = 'var(--done)';
-    toast.textContent = '✓ Sesión guardada en tu Google Sheet.';
-    renderExercises(d);
-    if(historyOpen) renderHistory();
-    renderStreak();
-  } else {
-    toast.style.color = 'var(--down)';
-    toast.textContent = isConfigured()
-      ? 'No se pudo guardar. Revisa tu conexión o la URL de Apps Script.'
-      : 'Configura CONFIG.SCRIPT_URL para poder guardar.';
-  }
-};
-
-document.getElementById('reset-link').onclick = async ()=>{
-  if(!confirm('¿Borrar todo el historial guardado de este día en el Sheet? Esto no se puede deshacer.')) return;
-  const ok = await apiDeleteDay(currentDay);
-  if(ok){
-    ALL_DATA.sessions = ALL_DATA.sessions.filter(s=>s.day!==currentDay);
-    ALL_DATA.sets = ALL_DATA.sets.filter(s=>s.day!==currentDay);
-    const d = DAYS.find(x=>x.key===currentDay);
-    renderExercises(d);
-    renderHistory();
-    renderStreak();
-  } else {
-    alert('No se pudo borrar. Revisa tu conexión o la configuración de Apps Script.');
-  }
-};
-
-// ---------- Dashboard ----------
-
-function sparkline(points, w, h){
-  if(points.length < 2){
-    return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}"><text x="4" y="${h/2}" fill="var(--text-muted)" font-size="11">Necesitas al menos 2 sesiones para ver tendencia</text></svg>`;
-  }
-  const vals = points.map(p=>p.v);
-  const min = Math.min(...vals), max = Math.max(...vals);
-  const range = (max-min) || 1;
-  const pad = 6;
-  const stepX = (w - pad*2) / (points.length - 1);
-  const coords = points.map((p,i)=>{
-    const x = pad + i*stepX;
-    const y = h - pad - ((p.v - min)/range) * (h - pad*2);
-    return [x,y];
-  });
-  const path = coords.map((c,i)=> (i===0?'M':'L') + c[0].toFixed(1) + ',' + c[1].toFixed(1)).join(' ');
-  const dots = coords.map((c,i)=> `<circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="${i===coords.length-1?3.5:2}" fill="${i===coords.length-1?'var(--accent)':'var(--text-muted)'}"/>`).join('');
-  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}">
-    <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    ${dots}
-  </svg>`;
-}
-
-async function buildDashboard(refresh){
-  const dashEl = document.getElementById('dash-view');
-  dashEl.innerHTML = '<p class="loading">Cargando tu progreso…</p>';
-
-  if(refresh || !dataLoaded){
-    ALL_DATA = await apiGetAll();
-    dataLoaded = true;
-  }
-
-  const sessions = [...ALL_DATA.sessions].sort((a,b)=> String(a.date).localeCompare(String(b.date)));
-
-  if(sessions.length === 0){
-    dashEl.innerHTML = `
-      <button class="refresh-btn" id="dash-refresh">↻ Actualizar</button>
-      <div class="stat-grid">
-        <div class="stat-box"><p class="stat-num">0</p><p class="stat-lbl">Sesiones</p></div>
-        <div class="stat-box"><p class="stat-num">0</p><p class="stat-lbl">Últimos 7 días</p></div>
-        <div class="stat-box"><p class="stat-num">–</p><p class="stat-lbl">Calif. prom.</p></div>
-      </div>
-      <p class="dash-empty">Aún no hay sesiones guardadas. Registra tu primer entrenamiento en la pestaña "Rutina" y aquí vas a ver tu progreso.</p>
-    `;
-    document.getElementById('dash-refresh').onclick = ()=>buildDashboard(true);
-    return;
-  }
-
-  const totalSessions = sessions.length;
-  const ratedSessions = sessions.filter(s=>Number(s.rating)>0);
-  const avgRating = ratedSessions.length ? (ratedSessions.reduce((s,x)=>s+Number(x.rating),0)/ratedSessions.length) : 0;
-  const cutoff = Date.now() - 7*24*60*60*1000;
-  const last7 = sessions.filter(s=> new Date(s.date).getTime() >= cutoff).length;
-
-  const exSeries = {};
-  ALL_DATA.sets.forEach(set=>{
-    const w = parseFloat(set.weight);
-    if(!(w>0)) return;
-    if(!exSeries[set.exId]) exSeries[set.exId] = {};
-    const key = set.date;
-    if(!exSeries[set.exId][key] || w > exSeries[set.exId][key]) exSeries[set.exId][key] = w;
-  });
-  const exSeriesArr = {};
-  Object.entries(exSeries).forEach(([exId, byDate])=>{
-    exSeriesArr[exId] = Object.entries(byDate)
-      .sort((a,b)=> a[0].localeCompare(b[0]))
-      .map(([date,v])=>({date, v}));
-  });
-
-  const volumeSeries = sessions.filter(s=>Number(s.volume)>0).map(s=>({date:s.date, v:Number(s.volume)}));
-  const ratingSeries = sessions.filter(s=>Number(s.rating)>0).map(s=>({date:s.date, v:Number(s.rating)}));
-
-  let html = `<button class="refresh-btn" id="dash-refresh">↻ Actualizar</button>
-    <div class="stat-grid">
-      <div class="stat-box"><p class="stat-num">${totalSessions}</p><p class="stat-lbl">Sesiones totales</p></div>
-      <div class="stat-box"><p class="stat-num">${last7}</p><p class="stat-lbl">Últimos 7 días</p></div>
-      <div class="stat-box"><p class="stat-num">${avgRating ? avgRating.toFixed(1) : '–'}</p><p class="stat-lbl">Calif. promedio</p></div>
-    </div>
-  `;
-
-  if(volumeSeries.length >= 2){
-    html += `<p class="dash-section-title">Volumen total por sesión (kg)</p>
-      <div class="ex-progress-card">${sparkline(volumeSeries, 300, 70)}</div>`;
-  }
-  if(ratingSeries.length >= 2){
-    html += `<p class="dash-section-title">Calificación de sesiones</p>
-      <div class="ex-progress-card">${sparkline(ratingSeries, 300, 70)}</div>`;
-  }
-
-  html += `<p class="dash-section-title">Progreso por ejercicio</p>`;
-
-  const exIds = Object.keys(exSeriesArr).sort((a,b)=> exSeriesArr[b].length - exSeriesArr[a].length);
-
-  if(exIds.length === 0){
-    html += `<p class="dash-empty">Aún no hay pesos registrados por ejercicio.</p>`;
-  } else {
-    exIds.forEach(exId=>{
-      const series = exSeriesArr[exId];
-      const info = EX_INDEX[exId] || {name: exId, dayLabel:''};
-      const first = series[0].v;
-      const last = series[series.length-1].v;
-      const diff = round1(last-first);
-      let trendClass = 'flat', trendText = 'sin cambio';
-      if(diff>0){ trendClass='up'; trendText = '+'+diff+' kg'; }
-      else if(diff<0){ trendClass='down'; trendText = diff+' kg'; }
-      html += `
-        <div class="ex-progress-card">
-          <div class="ep-head">
-            <span class="ep-name">${info.name}<span class="day-pill">${info.dayLabel}</span></span>
-            <span class="ep-trend ${trendClass}">${trendText}</span>
-          </div>
-          <p class="ep-meta">Actual: ${last} kg · Mejor: ${Math.max(...series.map(p=>p.v))} kg · ${series.length} sesión${series.length===1?'':'es'} registradas</p>
-          <div class="ep-chart">${sparkline(series, 300, 60)}</div>
-        </div>
-      `;
+  const sessions = [];
+  for (let i = 1; i < sessValues.length; i++) {
+    const r = sessValues[i];
+    sessions.push({
+      savedAt: r[0],
+      day: r[1],
+      date: formatDate_(r[2]),
+      location: r[3],
+      rating: r[4],
+      note: r[5],
+      volume: r[6],
     });
   }
 
-  dashEl.innerHTML = html;
-  document.getElementById('dash-refresh').onclick = ()=>buildDashboard(true);
+  const sets = [];
+  for (let i = 1; i < setValues.length; i++) {
+    const r = setValues[i];
+    sets.push({
+      savedAt: r[0],
+      day: r[1],
+      date: formatDate_(r[2]),
+      exId: r[3],
+      exName: r[4],
+      setNum: r[5],
+      weight: r[6],
+      reps: r[7],
+      done: r[8],
+    });
+  }
+
+  return { sessions: sessions, sets: sets };
 }
 
-document.querySelectorAll('.vt-btn').forEach(btn=>{
-  btn.onclick = async ()=>{
-    document.querySelectorAll('.vt-btn').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    const view = btn.dataset.view;
-    document.getElementById('day-view').style.display = view==='day' ? '' : 'none';
-    document.getElementById('dash-view').style.display = view==='dash' ? '' : 'none';
-    if(view === 'dash') await buildDashboard(false);
-  };
-});
+function formatDate_(value) {
+  // Google Sheets a veces convierte strings tipo "2026-07-15" en objetos Date.
+  // Esto asegura que siempre regrese como string YYYY-MM-DD.
+  if (value instanceof Date) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  return String(value);
+}
 
-loadDay();
-</script>
-</body>
-</html>
+function jsonResponse_(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
