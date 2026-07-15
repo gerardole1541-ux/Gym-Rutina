@@ -324,7 +324,7 @@ DAYS.forEach(d => {
 // ---------- Backend: Google Sheets vía Apps Script ----------
 
 function isConfigured(){
-  return CONFIG.SCRIPT_URL && !CONFIG.SCRIPT_URL.includes('PEGA_AQUI');
+  return CONFIG.SCRIPT_URL && !CONFIG.SCRIPT_URL.includes('https://script.google.com/macros/s/AKfycbxujkct_N1DJ15yyNDqMSLMmP8sJ1iZyvA8iuSF7pSV5ct6dge8TCFzVsunD5wiv-e_Yg/exec');
 }
 
 async function apiGetAll(){
