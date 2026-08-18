@@ -21,6 +21,7 @@
     --done:#4FD1A5;
     --done-dim:#1C3530;
     --down:#E2574C;
+    --down-dim:#3A1512;
     --home:#6FA8DC;
     --home-dim:#1D2E42;
   }
@@ -61,25 +62,41 @@
   .rule-banner b{color:var(--text);}
 
   .card{background:var(--surface); border:0.5px solid var(--border); border-radius:12px; padding:14px; margin-bottom:10px;}
-  .ex-head{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:2px;}
+  .ex-head{display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:2px;}
   .ex-name{font-size:15.5px; font-weight:500;}
   .ex-meta{font-size:11.5px; color:var(--text-muted);}
   .ex-tip{font-size:11.5px; color:var(--text-2); margin:4px 0 0; font-style:italic;}
   .pr-badge{font-size:10px; font-weight:600; color:var(--accent); background:var(--accent-dim); padding:2px 7px; border-radius:10px; margin-left:6px;}
 
-  .set-row{display:grid; grid-template-columns:28px 1fr 1fr 38px; gap:8px; align-items:center; margin-top:8px;}
+  .ex-unit-row{display:flex; align-items:center; gap:6px; flex-shrink:0;}
+  .ex-unit-select{
+    height:28px; padding:0 6px; border-radius:7px; border:0.5px solid var(--border); background:var(--surface-2);
+    color:var(--text-2); font-size:11px; font-family:'Inter',sans-serif;
+  }
+  .ex-plate-input{
+    width:52px; height:28px; border-radius:7px; border:0.5px solid var(--border); background:var(--surface-2);
+    color:var(--text); font-size:11px; text-align:center;
+  }
+  .ex-plate-lbl{font-size:10px; color:var(--text-muted); white-space:nowrap;}
+
+  .set-row{display:grid; grid-template-columns:24px 1fr 1fr 46px; gap:8px; align-items:center; margin-top:8px;}
   .set-num{font-family:'Oswald',sans-serif; font-size:13px; color:var(--text-muted); text-align:center;}
   .set-row input{
     width:100%; height:38px; background:var(--surface-2); border:0.5px solid var(--border); border-radius:8px;
     color:var(--text); font-size:14px; text-align:center; font-family:'Inter',sans-serif;
   }
   .set-row input::placeholder{color:var(--text-muted);}
-  .check{
-    width:38px; height:38px; border-radius:8px; border:0.5px solid var(--border); background:var(--surface-2);
-    display:flex; align-items:center; justify-content:center; font-size:18px; color:transparent;
+
+  .feel-select{
+    width:46px; height:38px; border-radius:8px; border:0.5px solid var(--border); background:var(--surface-2);
+    color:var(--text-muted); font-size:16px; text-align:center; text-align-last:center; appearance:none;
+    -webkit-appearance:none;
   }
-  .check.on{background:var(--done-dim); border-color:var(--done); color:var(--done);}
-  .delta{font-size:10.5px; margin-top:4px; padding-left:36px;}
+  .feel-select.f-bien{background:var(--done-dim); border-color:var(--done); color:var(--done);}
+  .feel-select.f-regular{background:var(--accent-dim); border-color:var(--accent); color:var(--accent);}
+  .feel-select.f-mal{background:var(--down-dim); border-color:var(--down); color:var(--down);}
+
+  .delta{font-size:10.5px; margin-top:4px; padding-left:32px;}
   .delta.up{color:var(--done);}
   .delta.down{color:var(--down);}
 
@@ -161,7 +178,7 @@
       <button class="mode-btn" data-mode="home">🏠 Casa</button>
     </div>
 
-    <div class="rule-banner">Son intercambiables por <b>enfoque</b>, no por fecha: si te toca Upper A y no puedes ir al gym, haz el Upper A de casa. Solo evita repetir el <b>mismo tipo de día</b> (ej. Upper A gym y Upper A casa) en menos de <b>48 horas</b>.</div>
+    <div class="rule-banner">Son intercambiables por <b>enfoque</b>, no por fecha: si te toca Upper A y no puedes ir al gym, haz el Upper A de casa. Solo evita repetir el <b>mismo tipo de día</b> en menos de <b>48 horas</b>. Cada ejercicio recuerda la unidad (kg/lb/placas) que usaste la última vez.</div>
 
     <div id="day-info" class="day-info"></div>
     <div id="exercises"></div>
@@ -195,7 +212,6 @@ const CONFIG = {
   SCRIPT_URL: 'PEGA_AQUI_TU_URL_DE_APPS_SCRIPT'
 };
 
-// Calentamiento compartido para los días de casa
 const HOME_WARMUP = '5-7 min: jumping jacks o marcha en su lugar (2-3 min) + círculos de hombros, rotación de cadera, 10 sentadillas de peso corporal, 5 dominadas de agarre muerto';
 const HOME_CARDIO = '10-15 min: salta la cuerda (mejor opción) o marcha con rodillas altas / jumping jacks a ritmo de conversación';
 
@@ -311,6 +327,7 @@ const DAYS = [
 ];
 
 const MODE_LABEL = { gym: 'Gym', home: 'Casa' };
+const LB_PER_KG = 2.20462;
 
 const EX_INDEX = {};
 DAYS.forEach(d => {
@@ -324,7 +341,7 @@ DAYS.forEach(d => {
 // ---------- Backend: Google Sheets vía Apps Script ----------
 
 function isConfigured(){
-  return CONFIG.SCRIPT_URL && !CONFIG.SCRIPT_URL.includes('https://script.google.com/macros/s/AKfycbxujkct_N1DJ15yyNDqMSLMmP8sJ1iZyvA8iuSF7pSV5ct6dge8TCFzVsunD5wiv-e_Yg/exec');
+  return CONFIG.SCRIPT_URL && !CONFIG.SCRIPT_URL.includes('PEGA_AQUI');
 }
 
 async function apiGetAll(){
@@ -380,6 +397,12 @@ let historyOpen = false;
 let ALL_DATA = { sessions: [], sets: [] };
 let dataLoaded = false;
 
+// unidad elegida POR EJERCICIO (en memoria durante esta sesión de uso de la app)
+// exUnitChoice[exId] = 'kg' | 'lb' | 'plates'
+// exPlateWeight[exId] = número (kg por placa), solo relevante si unidad === 'plates'
+let exUnitChoice = {};
+let exPlateWeight = {};
+
 function round1(n){ return Math.round(n*10)/10; }
 function todayISO(){ return new Date().toISOString().slice(0,10); }
 function parseDefaultReps(label){ const m = label.match(/\d+/); return m ? m[0] : ''; }
@@ -387,6 +410,53 @@ function parseDefaultReps(label){ const m = label.match(/\d+/); return m ? m[0] 
 function currentDayDef(){
   const d = DAYS.find(x=>x.key===currentDay);
   return { key:d.key, label:d.label, tag:d.tag, ...d[currentMode] };
+}
+
+// Busca en el historial la última unidad (y peso por placa) usada para este ejercicio
+function getExHistoryDefaults(exId){
+  const rows = ALL_DATA.sets.filter(s => s.exId === exId && s.unit);
+  if(rows.length === 0) return { unit:'kg', plateWeight:10 };
+  const sorted = [...rows].sort((a,b)=> String(a.date).localeCompare(String(b.date)));
+  const lastRow = sorted[sorted.length-1];
+  return {
+    unit: lastRow.unit || 'kg',
+    plateWeight: parseFloat(lastRow.plateWeightKg) > 0 ? parseFloat(lastRow.plateWeightKg) : 10,
+  };
+}
+
+function getExUnit(exId){
+  if(exUnitChoice[exId]) return exUnitChoice[exId];
+  const def = getExHistoryDefaults(exId);
+  exUnitChoice[exId] = def.unit;
+  if(!exPlateWeight[exId]) exPlateWeight[exId] = def.plateWeight;
+  return exUnitChoice[exId];
+}
+
+function getExPlateWeight(exId){
+  if(!exPlateWeight[exId]){
+    exPlateWeight[exId] = getExHistoryDefaults(exId).plateWeight;
+  }
+  return exPlateWeight[exId];
+}
+
+function kgToDisplayEx(kg, exId){
+  if(kg === null || kg === undefined || kg === '') return '';
+  const n = Number(kg);
+  const unit = getExUnit(exId);
+  if(unit === 'lb') return round1(n * LB_PER_KG);
+  if(unit === 'plates') return round1(n / getExPlateWeight(exId));
+  return round1(n);
+}
+function displayToKgEx(val, exId){
+  const n = parseFloat(val) || 0;
+  const unit = getExUnit(exId);
+  if(unit === 'lb') return n / LB_PER_KG;
+  if(unit === 'plates') return n * getExPlateWeight(exId);
+  return n;
+}
+function exUnitLabel(exId){
+  const unit = getExUnit(exId);
+  return unit === 'lb' ? 'lb' : (unit === 'plates' ? 'placas' : 'kg');
 }
 
 function getExerciseStats(exId){
@@ -400,6 +470,16 @@ function getExerciseStats(exId){
   sorted.filter(r=>r.date===lastDate).forEach(r=>{ const w=parseFloat(r.weight); if(w>last) last=w; });
   return {last, best};
 }
+
+// ---------- Borrador en memoria (evita perder lo capturado al cambiar de pestaña) ----------
+let DRAFTS = {};
+function draftKey(){ return currentDay + '|' + currentMode; }
+function getDraft(){
+  const k = draftKey();
+  if(!DRAFTS[k]) DRAFTS[k] = { sets:{}, rating:0, note:'' };
+  return DRAFTS[k];
+}
+function clearDraft(){ delete DRAFTS[draftKey()]; }
 
 // ---------- Render ----------
 
@@ -416,7 +496,7 @@ function renderTabs(){
     const b = document.createElement('button');
     b.className = 'tab' + (d.key===currentDay ? ' active' : '');
     b.textContent = d.label;
-    b.onclick = ()=>{ currentDay = d.key; rating = 0; loadDay(); };
+    b.onclick = ()=>{ currentDay = d.key; loadDay(); };
     el.appendChild(b);
   });
 }
@@ -447,55 +527,122 @@ function renderExercises(d){
     el.innerHTML = `<div class="card"><p class="dash-empty" style="padding:10px 0;">Este día no tiene ejercicios fijos — revisa la nota de arriba y elige tu opción del día.</p></div>`;
     return;
   }
+  const draft = getDraft();
+
   d.exercises.forEach(ex=>{
-    const stats = getExerciseStats(ex.id);
+    const stats = getExerciseStats(ex.id); // en kg canónico
+    const unit = getExUnit(ex.id);
+    const uLabel = exUnitLabel(ex.id);
+    const bestDisplay = stats.best ? kgToDisplayEx(stats.best, ex.id) : null;
+
     const card = document.createElement('div');
     card.className = 'card';
     card.innerHTML = `
       <div class="ex-head">
-        <span class="ex-name">${ex.name}${stats.best ? `<span class="pr-badge">mejor: ${stats.best} kg</span>` : ''}</span>
+        <span class="ex-name">${ex.name}${bestDisplay ? `<span class="pr-badge">mejor: ${bestDisplay} ${uLabel}</span>` : ''}</span>
+        <div class="ex-unit-row">
+          <select class="ex-unit-select" data-ex="${ex.id}">
+            <option value="kg" ${unit==='kg'?'selected':''}>kg</option>
+            <option value="lb" ${unit==='lb'?'selected':''}>lb</option>
+            <option value="plates" ${unit==='plates'?'selected':''}>Placas</option>
+          </select>
+          ${unit==='plates' ? `
+            <span class="ex-plate-lbl">kg/placa</span>
+            <input type="number" class="ex-plate-input" data-ex="${ex.id}" value="${getExPlateWeight(ex.id)}" min="0.5" step="0.5">
+          ` : ''}
+        </div>
       </div>
       <div class="ex-meta">${ex.reps}${ex.type==='weight' ? ' reps' : ''} · descanso ${ex.rest}</div>
       ${ex.tip ? `<p class="ex-tip">${ex.tip}</p>` : ''}
       <div class="sets" data-ex="${ex.id}"></div>
     `;
+
+    card.querySelector('.ex-unit-select').addEventListener('change', function(){
+      exUnitChoice[ex.id] = this.value;
+      renderExercises(d); // re-pinta esta tarjeta (y todas) con la nueva unidad
+    });
+    const plateInput = card.querySelector('.ex-plate-input');
+    if(plateInput){
+      plateInput.addEventListener('input', function(){
+        const v = parseFloat(this.value);
+        if(v > 0){
+          exPlateWeight[ex.id] = v;
+          renderExercises(d);
+        }
+      });
+    }
+
     const setsWrap = card.querySelector('.sets');
-    const lastWeight = stats.last || '';
+    const lastWeightDisplay = stats.last ? kgToDisplayEx(stats.last, ex.id) : '';
+    const draftSets = draft.sets[ex.id] || [];
+
     for(let i=1;i<=ex.sets;i++){
+      const draftSet = draftSets[i-1] || null;
+      const weightKgToShow = draftSet && draftSet.weightKg ? draftSet.weightKg : (i===1 && stats.last ? stats.last : null);
+      const weightDisplay = weightKgToShow ? kgToDisplayEx(weightKgToShow, ex.id) : '';
+      const repsToShow = draftSet && draftSet.reps ? draftSet.reps : parseDefaultReps(ex.reps);
+      const feelOn = draftSet ? draftSet.feeling : '';
+
       const row = document.createElement('div');
       row.className = 'set-row';
       row.innerHTML = `
         <span class="set-num">${i}</span>
-        <input type="number" inputmode="decimal" placeholder="kg" step="0.5" data-field="weight" data-set="${i}" value="${i===1 && lastWeight ? lastWeight : ''}">
-        <input type="number" inputmode="numeric" placeholder="reps" data-field="reps" data-set="${i}" value="${parseDefaultReps(ex.reps)}">
-        <button class="check" data-field="done" data-set="${i}">✓</button>
+        <input type="number" inputmode="decimal" placeholder="${uLabel}" step="0.5" data-field="weight" data-set="${i}" value="${weightDisplay}">
+        <input type="number" inputmode="numeric" placeholder="reps" data-field="reps" data-set="${i}" value="${repsToShow}">
+        <select class="feel-select ${feelOn?'f-'+feelOn:''}" data-field="feel" data-set="${i}">
+          <option value="">–</option>
+          <option value="bien" ${feelOn==='bien'?'selected':''}>🙂</option>
+          <option value="regular" ${feelOn==='regular'?'selected':''}>😐</option>
+          <option value="mal" ${feelOn==='mal'?'selected':''}>🙁</option>
+        </select>
       `;
       setsWrap.appendChild(row);
-    }
-    setsWrap.querySelectorAll('.check').forEach(btn=>{
-      btn.onclick = ()=> btn.classList.toggle('on');
-    });
-    if(lastWeight){
-      const firstInput = setsWrap.querySelector('input[data-field="weight"]');
-      firstInput.addEventListener('input', ()=>{
-        const v = parseFloat(firstInput.value);
-        const old = parseFloat(lastWeight);
-        const wrap = setsWrap.closest('.card');
-        let deltaEl = wrap.querySelector('.delta');
-        if(!deltaEl){
-          deltaEl = document.createElement('p');
-          deltaEl.className = 'delta';
-          wrap.appendChild(deltaEl);
-        }
-        if(!isNaN(v) && !isNaN(old) && v!==old){
-          const diff = round1(v-old);
-          deltaEl.textContent = (diff>0?'+':'') + diff + ' kg vs última vez';
-          deltaEl.className = 'delta ' + (diff>0?'up':'down');
-        } else {
-          deltaEl.textContent='';
+
+      function ensureDraftSet(){
+        if(!draft.sets[ex.id]) draft.sets[ex.id] = [];
+        if(!draft.sets[ex.id][i-1]) draft.sets[ex.id][i-1] = { weightKg:null, reps:'', feeling:'' };
+        return draft.sets[ex.id][i-1];
+      }
+
+      const weightInput = row.querySelector('[data-field="weight"]');
+      const repsInput = row.querySelector('[data-field="reps"]');
+      const feelSelect = row.querySelector('[data-field="feel"]');
+
+      weightInput.addEventListener('input', ()=>{
+        const ds = ensureDraftSet();
+        ds.weightKg = weightInput.value ? round1(displayToKgEx(weightInput.value, ex.id)) : null;
+
+        if(lastWeightDisplay && i===1){
+          const v = parseFloat(weightInput.value);
+          const old = parseFloat(lastWeightDisplay);
+          const wrap = setsWrap.closest('.card');
+          let deltaEl = wrap.querySelector('.delta');
+          if(!deltaEl){
+            deltaEl = document.createElement('p');
+            deltaEl.className = 'delta';
+            wrap.appendChild(deltaEl);
+          }
+          if(!isNaN(v) && !isNaN(old) && v!==old){
+            const diff = round1(v-old);
+            deltaEl.textContent = (diff>0?'+':'') + diff + ' ' + uLabel + ' vs última vez';
+            deltaEl.className = 'delta ' + (diff>0?'up':'down');
+          } else {
+            deltaEl.textContent='';
+          }
         }
       });
+
+      repsInput.addEventListener('input', ()=>{
+        ensureDraftSet().reps = repsInput.value;
+      });
+
+      feelSelect.addEventListener('change', ()=>{
+        const val = feelSelect.value;
+        ensureDraftSet().feeling = val;
+        feelSelect.className = 'feel-select' + (val ? ' f-'+val : '');
+      });
     }
+
     el.appendChild(card);
   });
 }
@@ -507,7 +654,7 @@ function renderStars(){
     const b = document.createElement('button');
     b.className = 'star' + (i<=rating ? ' on' : '');
     b.textContent = '★';
-    b.onclick = ()=>{ rating = i; renderStars(); };
+    b.onclick = ()=>{ rating = i; getDraft().rating = i; renderStars(); };
     el.appendChild(b);
   }
 }
@@ -551,14 +698,16 @@ async function loadDay(){
   const d = currentDayDef();
   renderDayInfo(d);
   document.getElementById('toast').textContent = '';
-  document.getElementById('note').value = '';
-  rating = 0;
 
   if(!dataLoaded){
     document.getElementById('storage-info').textContent = 'Cargando datos de tu Google Sheet…';
     ALL_DATA = await apiGetAll();
     dataLoaded = true;
   }
+
+  const draft = getDraft();
+  rating = draft.rating || 0;
+  document.getElementById('note').value = draft.note || '';
 
   renderExercises(d);
   renderStars();
@@ -569,6 +718,10 @@ async function loadDay(){
     ? 'Guardando en tu Google Sheet.'
     : 'Guardado desactivado — configura CONFIG.SCRIPT_URL.';
 }
+
+document.getElementById('note').addEventListener('input', function(){
+  getDraft().note = this.value;
+});
 
 document.querySelectorAll('.mode-btn').forEach(btn=>{
   btn.onclick = ()=>{
@@ -597,13 +750,17 @@ document.getElementById('save-btn').onclick = async ()=>{
   cards.forEach((card, idx)=>{
     const ex = d.exercises[idx];
     if(!ex) return;
+    const unit = getExUnit(ex.id);
+    const plateW = unit === 'plates' ? getExPlateWeight(ex.id) : '';
     const rows = card.querySelectorAll('.set-row');
     rows.forEach(row=>{
-      const done = row.querySelector('.check').classList.contains('on');
-      const w = parseFloat(row.querySelector('[data-field="weight"]').value) || 0;
+      const wRaw = parseFloat(row.querySelector('[data-field="weight"]').value) || 0;
+      const w = round1(displayToKgEx(wRaw, ex.id)); // siempre se guarda en kg
       const r = parseFloat(row.querySelector('[data-field="reps"]').value) || 0;
+      const feeling = row.querySelector('[data-field="feel"]').value;
+      const done = feeling !== ''; // marcar sensación = serie completada
       if(w>0 && r>0) volume += w*r;
-      sessionSets.push({exId:ex.id, exName:ex.name, weight:w, reps:r, done});
+      sessionSets.push({exId:ex.id, exName:ex.name, weight:w, reps:r, done, feeling, unit, plateWeightKg: plateW});
     });
   });
 
@@ -625,11 +782,19 @@ document.getElementById('save-btn').onclick = async ()=>{
 
   if(ok){
     ALL_DATA.sessions.push({day: currentDay, date, location: currentMode, rating, note: payload.note, volume});
-    sessionSets.forEach(s=> ALL_DATA.sets.push({day: currentDay, date, exId: s.exId, exName: s.exName, weight: s.weight, reps: s.reps, done: s.done}));
+    sessionSets.forEach(s=> ALL_DATA.sets.push({
+      day: currentDay, date, exId: s.exId, exName: s.exName, weight: s.weight, reps: s.reps,
+      done: s.done, feeling: s.feeling, unit: s.unit, plateWeightKg: s.plateWeightKg
+    }));
+
+    clearDraft();
+    rating = 0;
+    document.getElementById('note').value = '';
 
     toast.style.color = 'var(--done)';
     toast.textContent = '✓ Sesión guardada en tu Google Sheet.';
     renderExercises(d);
+    renderStars();
     if(historyOpen) renderHistory();
     renderStreak();
   } else {
@@ -759,21 +924,23 @@ async function buildDashboard(refresh){
     html += `<p class="dash-empty">Aún no hay pesos registrados por ejercicio.</p>`;
   } else {
     exIds.forEach(exId=>{
-      const series = exSeriesArr[exId];
+      const seriesKg = exSeriesArr[exId];
+      const uLabel = exUnitLabel(exId);
+      const series = seriesKg.map(p=>({date:p.date, v:kgToDisplayEx(p.v, exId)}));
       const info = EX_INDEX[exId] || {name: exId, dayLabel:''};
       const first = series[0].v;
       const last = series[series.length-1].v;
       const diff = round1(last-first);
       let trendClass = 'flat', trendText = 'sin cambio';
-      if(diff>0){ trendClass='up'; trendText = '+'+diff+' kg'; }
-      else if(diff<0){ trendClass='down'; trendText = diff+' kg'; }
+      if(diff>0){ trendClass='up'; trendText = '+'+diff+' '+uLabel; }
+      else if(diff<0){ trendClass='down'; trendText = diff+' '+uLabel; }
       html += `
         <div class="ex-progress-card">
           <div class="ep-head">
             <span class="ep-name">${info.name}<span class="day-pill">${info.dayLabel}</span></span>
             <span class="ep-trend ${trendClass}">${trendText}</span>
           </div>
-          <p class="ep-meta">Actual: ${last} kg · Mejor: ${Math.max(...series.map(p=>p.v))} kg · ${series.length} sesión${series.length===1?'':'es'} registradas</p>
+          <p class="ep-meta">Actual: ${last} ${uLabel} · Mejor: ${Math.max(...series.map(p=>p.v))} ${uLabel} · ${series.length} sesión${series.length===1?'':'es'} registradas</p>
           <div class="ep-chart">${sparkline(series, 300, 60)}</div>
         </div>
       `;
