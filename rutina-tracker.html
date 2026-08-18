@@ -342,6 +342,7 @@ DAYS.forEach(d => {
 
 function isConfigured(){
   return CONFIG.SCRIPT_URL && !CONFIG.SCRIPT_URL.includes('PEGA_AQUI');
+}
 
 async function apiGetAll(){
   if(!isConfigured()) return {sessions:[], sets:[]};
