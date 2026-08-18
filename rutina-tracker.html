@@ -209,7 +209,7 @@
 // CONFIGURACIÓN: pega aquí la URL de tu Web App de Apps Script
 // ============================================================
 const CONFIG = {
-  SCRIPT_URL: 'PEGA_AQUI_TU_URL_DE_APPS_SCRIPT'
+  SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbw1Zwm1el0h9WqNGt0PHz05lRs4LMnf0ByMNnax4M8VreHb58dqOdZeNR3cJ8JmxhRM6w/exec'
 };
 
 const HOME_WARMUP = '5-7 min: jumping jacks o marcha en su lugar (2-3 min) + círculos de hombros, rotación de cadera, 10 sentadillas de peso corporal, 5 dominadas de agarre muerto';
@@ -341,8 +341,7 @@ DAYS.forEach(d => {
 // ---------- Backend: Google Sheets vía Apps Script ----------
 
 function isConfigured(){
-  return CONFIG.SCRIPT_URL && !CONFIG.SCRIPT_URL.includes('https://script.google.com/macros/s/AKfycbyWusD-WSTRXSAmXbCl7O4Xc5T8r8Zdf2ynbwGV3beLDw4ETTJSWEf4PYQ4BpS6z5uC_A/exec');
-}
+  return CONFIG.SCRIPT_URL && !CONFIG.SCRIPT_URL.includes('PEGA_AQUI');
 
 async function apiGetAll(){
   if(!isConfigured()) return {sessions:[], sets:[]};
